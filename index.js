@@ -1,35 +1,39 @@
 const fs = require('fs');
+const { Transform } = require('stream');
 
-const filePath = 'text.txt';
-let totalWords = 0;
+const inputFilePath = 'text.txt';
+const outputFilePath = 'text_out.txt';
 
-const readStream = fs.createReadStream(filePath, { encoding: 'latin1' });
+const reader = fs.createReadStream(inputFilePath, { encoding: 'latin1' });
+const writer = fs.createWriteStream(outputFilePath, { encoding: 'latin1' });
 
-readStream.on('data', processData);
-
-readStream.on('end', () => {
-    console.log(`Total words: ${totalWords}`);
+const modifyLettersStream = new Transform({
+    transform(chunk, encoding, callback) {
+        const modifiedChunk = modifyChunk(chunk);
+        callback(null, modifiedChunk);
+    }
 });
 
-function processData(chunk) {
-    const chunkString = chunk.toString('utf8');
-    const cleanChunk = removeANSI(chunkString);
-    const lines = cleanChunk.split('\n');
-    
-    lines.forEach(countAndPrintWords);
+function modifyChunk(chunk) {
+    return chunk.toString('utf8').split('').map((letter, index) => {
+        if ((index + 1) % 3 === 0) {
+            return letter.toUpperCase();
+        } else {
+            return letter;
+        }
+    }).join('');
 }
 
-function countAndPrintWords(line) {
-    console.log(line);
-    totalWords += countWords(line);
-}
+reader.pipe(modifyLettersStream).pipe(writer);
 
-function countWords(line) {
-    const wordRegex = /\b\w+\b/g;
-    return (line.match(wordRegex) || []).length;
-}
+writer.on('finish', () => {
+    console.log('File processing complete.');
+});
 
-function removeANSI(text) {
-    const ansiRegex = /\x1B\[[0-?]*[ -/]*[@-~]/g;
-    return text.replace(ansiRegex, '');
-}
+reader.on('error', (err) => {
+    console.error('Error reading input file:', err);
+});
+
+writer.on('error', (err) => {
+    console.error('Error writing output file:', err);
+});
